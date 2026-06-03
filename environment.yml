@@ -13,5 +13,6 @@ dependencies:
   - torchvision=0.13.1
   - tqdm
   - pip:
+    - wandb
     - submodules/diff-gaussian-rasterization
     - submodules/simple-knn

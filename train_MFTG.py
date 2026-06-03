@@ -24,18 +24,14 @@ from utils.image_utils import psnr
 from lpipsPyTorch import lpips
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
-try:
-    from torch.utils.tensorboard import SummaryWriter
-    TENSORBOARD_FOUND = True
-except ImportError:
-    TENSORBOARD_FOUND = False
+import wandb
 
 
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, step):
     
     first_iter = 0
-    tb_writer = prepare_output_and_logger(dataset)
+    prepare_output_and_logger(dataset)
     if step==1:
         global scene_temp
         global gaussians
@@ -130,7 +126,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 progress_bar.close()
 
             # Log and save
-            training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background),step)
+            training_report(iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background),step)
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -175,19 +171,16 @@ def prepare_output_and_logger(args):
     with open(os.path.join(args.model_path, "cfg_args"), 'w') as cfg_log_f:
         cfg_log_f.write(str(Namespace(**vars(args))))
 
-    # Create Tensorboard writer
-    tb_writer = None
-    if TENSORBOARD_FOUND:
-        tb_writer = SummaryWriter(args.model_path)
-    else:
-        print("Tensorboard not available: not logging progress")
-    return tb_writer
+    # Initialize Weights & Biases
+    wandb.init(project="thermal-gaussian", name=os.path.basename(args.model_path), config=vars(args))
+    return True
 
-def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, scene , renderFunc, renderArgs, step):
-    if tb_writer:
-        tb_writer.add_scalar('train_loss_patches/l1_loss', Ll1.item(), iteration)
-        tb_writer.add_scalar('train_loss_patches/total_loss', loss.item(), iteration)
-        tb_writer.add_scalar('iter_time', elapsed, iteration)
+def training_report(iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, scene , renderFunc, renderArgs, step):
+    wandb.log({
+        'train_loss_patches/l1_loss': Ll1.item(),
+        'train_loss_patches/total_loss': loss.item(),
+        'iter_time': elapsed
+    }, step=iteration)
 
     # Report test and samples of training set
     if iteration in testing_iterations:
@@ -205,10 +198,10 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 for idx, viewpoint in enumerate(config['cameras']):
                     image = torch.clamp(renderFunc(viewpoint, scene.gaussians, *renderArgs)["render"], 0.0, 1.0)
                     gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
-                    if tb_writer and (idx < 5):
-                        tb_writer.add_images(config['name'] + "_view_{}/render".format(viewpoint.image_name), image[None], global_step=iteration)
+                    if idx < 5:
+                        wandb.log({config['name'] + "_view_{}/render".format(viewpoint.image_name): wandb.Image((image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=iteration)
                         if iteration == testing_iterations[0]:
-                            tb_writer.add_images(config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name), gt_image[None], global_step=iteration)
+                            wandb.log({config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name): wandb.Image((gt_image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=iteration)
                     l1_test += l1_loss(image, gt_image).mean().double()
                     psnr_test += psnr(image, gt_image).mean().double()
                     lpips_test += lpips(image, gt_image, net_type='vgg').mean().double()
@@ -219,22 +212,26 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                 ssim_test /= len(config['cameras']) 
                 
                 print("\n[ITER {}] Evaluating {}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], l1_test, psnr_test, ssim_test, lpips_test))
-                if tb_writer:
-                    if step ==1:
-                        tb_writer.add_scalar(config['name'] + '/color/loss_viewpoint - l1_loss', l1_test, iteration)
-                        tb_writer.add_scalar(config['name'] + '/color/loss_viewpoint - psnr', psnr_test, iteration)
-                        tb_writer.add_scalar(config['name'] + '/color/loss_viewpoint - lpips', lpips_test, iteration)
-                        tb_writer.add_scalar(config['name'] + '/color/loss_viewpoint - ssim', ssim_test, iteration)
-                    elif step ==2:
-                        tb_writer.add_scalar(config['name'] + '/thermal/loss_viewpoint - l1_loss', l1_test, iteration)
-                        tb_writer.add_scalar(config['name'] + '/thermal/loss_viewpoint - psnr', psnr_test, iteration)
-                        tb_writer.add_scalar(config['name'] + '/thermal/loss_viewpoint - lpips', lpips_test, iteration)
-                        tb_writer.add_scalar(config['name'] + '/thermal/loss_viewpoint - ssim', ssim_test, iteration)
+                if step ==1:
+                    wandb.log({
+                        config['name'] + '/color/loss_viewpoint - l1_loss': l1_test,
+                        config['name'] + '/color/loss_viewpoint - psnr': psnr_test,
+                        config['name'] + '/color/loss_viewpoint - lpips': lpips_test,
+                        config['name'] + '/color/loss_viewpoint - ssim': ssim_test
+                    }, step=iteration)
+                elif step ==2:
+                    wandb.log({
+                        config['name'] + '/thermal/loss_viewpoint - l1_loss': l1_test,
+                        config['name'] + '/thermal/loss_viewpoint - psnr': psnr_test,
+                        config['name'] + '/thermal/loss_viewpoint - lpips': lpips_test,
+                        config['name'] + '/thermal/loss_viewpoint - ssim': ssim_test
+                    }, step=iteration)
                     
 
-        if tb_writer:
-            tb_writer.add_histogram("scene/opacity_histogram", scene.gaussians.get_opacity, iteration)
-            tb_writer.add_scalar('total_points', scene.gaussians.get_xyz.shape[0], iteration)
+        wandb.log({
+            "scene/opacity_histogram": wandb.Histogram(scene.gaussians.get_opacity.cpu().numpy()),
+            'total_points': scene.gaussians.get_xyz.shape[0]
+        }, step=iteration)
         torch.cuda.empty_cache()
 
 if __name__ == "__main__":
