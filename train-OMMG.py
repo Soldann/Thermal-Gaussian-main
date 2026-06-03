@@ -28,10 +28,10 @@ from lpipsPyTorch import lpips
 import time
 import torch.nn.functional as F
 try:
-    from torch.utils.tensorboard import SummaryWriter
-    TENSORBOARD_FOUND = True
+    import wandb
+    WANDB_FOUND = True
 except ImportError:
-    TENSORBOARD_FOUND = False
+    WANDB_FOUND = False
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
@@ -171,12 +171,52 @@ def prepare_output_and_logger(args):
     with open(os.path.join(args.model_path, "cfg_args"), 'w') as cfg_log_f:
         cfg_log_f.write(str(Namespace(**vars(args))))
 
-    # Create Tensorboard writer
+    # Create wandb-backed writer
     tb_writer = None
-    if TENSORBOARD_FOUND:
-        tb_writer = SummaryWriter(args.model_path)
+    if WANDB_FOUND:
+        # Initialize wandb run storing files under model_path
+        try:
+            wandb.init(project=os.path.basename(args.model_path) or "thermal-gaussian", dir=args.model_path, config=vars(args))
+        except Exception:
+            print("Warning: wandb.init() failed, continuing without remote logging")
+
+        class WandbWriter:
+            def __init__(self, run):
+                self.run = run
+
+            def add_scalar(self, name, value, step):
+                try:
+                    v = float(value.item())
+                except Exception:
+                    try:
+                        v = float(value)
+                    except Exception:
+                        v = value
+                wandb.log({name: v}, step=step)
+
+            def add_images(self, name, images_tensor, global_step=None):
+                imgs = []
+                imgs_t = images_tensor.detach().cpu()
+                for im in imgs_t:
+                    img_np = (im.permute(1, 2, 0).numpy() * 255).astype('uint8')
+                    imgs.append(wandb.Image(img_np, caption=name))
+                wandb.log({name: imgs}, step=global_step)
+
+            def add_histogram(self, name, func_or_tensor, step):
+                try:
+                    data = func_or_tensor()
+                except Exception:
+                    data = func_or_tensor
+                if hasattr(data, 'detach'):
+                    arr = data.detach().cpu().numpy().ravel()
+                else:
+                    import numpy as _np
+                    arr = _np.array(data).ravel()
+                wandb.log({name: wandb.Histogram(arr)}, step=step)
+
+        tb_writer = WandbWriter(wandb)
     else:
-        print("Tensorboard not available: not logging progress")
+        print("wandb not available: not logging progress")
     return tb_writer
 
 def training_report(tb_writer, iteration, Ll1, Ll1_thermal, loss, l1_loss, elapsed, testing_iterations, scene : Scene, renderFunc, renderArgs):
