@@ -53,7 +53,7 @@ def loadCam(args, id, cam_info, resolution_scale):
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY, 
                   image=gt_image, gt_alpha_mask=loaded_mask,
                   image_name=cam_info.image_name, uid=id, data_device=args.data_device,
-                  thermal=gt_thermal)
+                  thermal=gt_thermal, R_thermal=getattr(cam_info, 'R_thermal', None), T_thermal=getattr(cam_info, 'T_thermal', None))
 
 
 def cameraList_from_camInfos(cam_infos, resolution_scale, args):

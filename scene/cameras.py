@@ -17,7 +17,8 @@ from utils.graphics_utils import getWorld2View2, getProjectionMatrix
 class Camera(nn.Module):
     def __init__(self, colmap_id, R, T, FoVx, FoVy, image, thermal, gt_alpha_mask,
                  image_name, uid,
-                 trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda"
+                 trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda",
+                 R_thermal=None, T_thermal=None
                  ):
         super(Camera, self).__init__()
 
@@ -59,6 +60,15 @@ class Camera(nn.Module):
         self.projection_matrix = getProjectionMatrix(znear=self.znear, zfar=self.zfar, fovX=self.FoVx, fovY=self.FoVy).transpose(0,1).cuda()
         self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
         self.camera_center = self.world_view_transform.inverse()[3, :3]
+
+        if R_thermal is not None and T_thermal is not None:
+             self.world_view_transform_thermal = torch.tensor(getWorld2View2(R_thermal, T_thermal, trans, scale)).transpose(0, 1).cuda()
+             self.full_proj_transform_thermal = (self.world_view_transform_thermal.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
+             self.camera_center_thermal = self.world_view_transform_thermal.inverse()[3, :3]
+        else:
+             self.world_view_transform_thermal = self.world_view_transform
+             self.full_proj_transform_thermal = self.full_proj_transform
+             self.camera_center_thermal = self.camera_center
 
 class MiniCam:
     def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform):
