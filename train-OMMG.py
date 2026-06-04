@@ -176,7 +176,7 @@ def prepare_output_and_logger(args):
     if WANDB_FOUND:
         # Initialize wandb run storing files under model_path
         try:
-            wandb.init(project=os.path.basename(args.model_path) or "thermal-gaussian", dir=args.model_path, config=vars(args))
+            wandb.init(project="thermal-gaussian", dir=args.model_path, config=vars(args))
         except Exception:
             print("Warning: wandb.init() failed, continuing without remote logging")
 
