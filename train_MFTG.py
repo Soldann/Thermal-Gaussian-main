@@ -126,7 +126,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 progress_bar.close()
 
             # Log and save
-            training_report(iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background),step)
+            wandb_step = iteration + (step - 1) * opt.iterations
+            training_report(iteration, wandb_step, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background), step)
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -175,12 +176,12 @@ def prepare_output_and_logger(args):
     wandb.init(project="thermal-gaussian", name=os.path.basename(args.model_path), config=vars(args))
     return True
 
-def training_report(iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, scene , renderFunc, renderArgs, step):
+def training_report(iteration, wandb_step, Ll1, loss, l1_loss, elapsed, testing_iterations, scene , renderFunc, renderArgs, step):
     wandb.log({
         'train_loss_patches/l1_loss': Ll1.item(),
         'train_loss_patches/total_loss': loss.item(),
         'iter_time': elapsed
-    }, step=iteration)
+    }, step=wandb_step)
 
     # Report test and samples of training set
     if iteration in testing_iterations:
@@ -199,9 +200,9 @@ def training_report(iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, 
                     image = torch.clamp(renderFunc(viewpoint, scene.gaussians, *renderArgs)["render"], 0.0, 1.0)
                     gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
                     if idx < 5:
-                        wandb.log({config['name'] + "_view_{}/render".format(viewpoint.image_name): wandb.Image((image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=iteration)
+                        wandb.log({config['name'] + "_view_{}/render".format(viewpoint.image_name): wandb.Image((image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=wandb_step)
                         if iteration == testing_iterations[0]:
-                            wandb.log({config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name): wandb.Image((gt_image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=iteration)
+                            wandb.log({config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name): wandb.Image((gt_image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=wandb_step)
                     l1_test += l1_loss(image, gt_image).mean().double()
                     psnr_test += psnr(image, gt_image).mean().double()
                     lpips_test += lpips(image, gt_image, net_type='vgg').mean().double()
@@ -218,20 +219,20 @@ def training_report(iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, 
                         config['name'] + '/color/loss_viewpoint - psnr': psnr_test,
                         config['name'] + '/color/loss_viewpoint - lpips': lpips_test,
                         config['name'] + '/color/loss_viewpoint - ssim': ssim_test
-                    }, step=iteration)
+                    }, step=wandb_step)
                 elif step ==2:
                     wandb.log({
                         config['name'] + '/thermal/loss_viewpoint - l1_loss': l1_test,
                         config['name'] + '/thermal/loss_viewpoint - psnr': psnr_test,
                         config['name'] + '/thermal/loss_viewpoint - lpips': lpips_test,
                         config['name'] + '/thermal/loss_viewpoint - ssim': ssim_test
-                    }, step=iteration)
+                    }, step=wandb_step)
                     
 
         wandb.log({
             "scene/opacity_histogram": wandb.Histogram(scene.gaussians.get_opacity.cpu().numpy()),
             'total_points': scene.gaussians.get_xyz.shape[0]
-        }, step=iteration)
+        }, step=wandb_step)
         torch.cuda.empty_cache()
 
 if __name__ == "__main__":
