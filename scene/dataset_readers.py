@@ -36,6 +36,8 @@ class CameraInfo(NamedTuple):
     thermal_path: str
     width: int
     height: int
+    thermal_R: np.array = None
+    thermal_T: np.array = None
 
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -110,6 +112,73 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder, thermal_fol
             cam_infos.append(cam_info)
     sys.stdout.write('\n')
     return cam_infos
+
+def transform_matrix_to_colmap_rt(transform_matrix):
+    # Nerfstudio stores camera-to-world transforms in the OpenGL camera convention.
+    c2w = np.array(transform_matrix)
+    c2w[:3, 1:3] *= -1
+
+    w2c = np.linalg.inv(c2w)
+    R = np.transpose(w2c[:3, :3])
+    T = w2c[:3, 3]
+    return R, T
+
+def resolve_frame_path(path, frame_path):
+    frame_path = Path(frame_path)
+    if frame_path.is_absolute():
+        return str(frame_path)
+    return str(Path(path) / frame_path)
+
+def frame_split(frame):
+    normalized_path = frame["file_path"].replace("\\", "/")
+    parts = normalized_path.split("/")
+    if "test" in parts:
+        return "test"
+    if "train" in parts:
+        return "train"
+    return "train"
+
+def readNerfstudioThermalCameras(path, transformsfile):
+    with open(os.path.join(path, transformsfile)) as json_file:
+        contents = json.load(json_file)
+
+    width = int(contents["w"])
+    height = int(contents["h"])
+    fl_x = float(contents["fl_x"])
+    fl_y = float(contents.get("fl_y", fl_x))
+    FovX = focal2fov(fl_x, width)
+    FovY = focal2fov(fl_y, height)
+
+    cam_infos = {"train": [], "test": []}
+    for idx, frame in enumerate(contents["frames"]):
+        image_path = resolve_frame_path(path, frame["file_path"])
+        thermal_path = resolve_frame_path(path, frame.get("thermal_file_path", frame["file_path"]))
+
+        if not os.path.exists(image_path):
+            print(f"Skipping frame with missing RGB image: {image_path}")
+            continue
+        if not os.path.exists(thermal_path):
+            print(f"Skipping frame with missing thermal image: {thermal_path}")
+            continue
+
+        R, T = transform_matrix_to_colmap_rt(frame["transform_matrix"])
+        thermal_R = None
+        thermal_T = None
+        if "thermal_transform_matrix" in frame:
+            thermal_R, thermal_T = transform_matrix_to_colmap_rt(frame["thermal_transform_matrix"])
+
+        image = Image.open(image_path)
+        thermal = Image.open(thermal_path)
+        image_name = Path(image_path).stem
+
+        cam_info = CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX,
+                              image=image, thermal=thermal,
+                              image_path=image_path, image_name=image_name,
+                              thermal_path=thermal_path, width=width, height=height,
+                              thermal_R=thermal_R, thermal_T=thermal_T)
+        cam_infos[frame_split(frame)].append(cam_info)
+
+    return cam_infos["train"], cam_infos["test"]
 
 def fetchPly(path):
     plydata = PlyData.read(path)
@@ -223,7 +292,8 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
             FovX = fovx
 
             cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                            image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1]))
+                            thermal=image, image_path=image_path, image_name=image_name,
+                            thermal_path=image_path, width=image.size[0], height=image.size[1]))
             
     return cam_infos
 
@@ -260,7 +330,38 @@ def readNerfSyntheticInfo(path, white_background, extension=".png"):
                            ply_path=ply_path)
     return scene_info
 
+def readNerfstudioThermalInfo(path, transformsfile="transforms.json"):
+    print("Reading Nerfstudio thermal transforms")
+    train_cam_infos, test_cam_infos = readNerfstudioThermalCameras(path, transformsfile)
+    train_cam_infos = sorted(train_cam_infos, key=lambda x: x.image_name)
+    test_cam_infos = sorted(test_cam_infos, key=lambda x: x.image_name)
+
+    nerf_normalization = getNerfppNorm(train_cam_infos)
+
+    ply_path = os.path.join(path, "points3d.ply")
+    if not os.path.exists(ply_path):
+        num_pts = 100_000
+        print(f"Generating random point cloud ({num_pts})...")
+
+        xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
+        shs = np.random.random((num_pts, 3)) / 255.0
+        pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
+
+        storePly(ply_path, xyz, SH2RGB(shs) * 255)
+    try:
+        pcd = fetchPly(ply_path)
+    except:
+        pcd = None
+
+    scene_info = SceneInfo(point_cloud=pcd,
+                           train_cameras=train_cam_infos,
+                           test_cameras=test_cam_infos,
+                           nerf_normalization=nerf_normalization,
+                           ply_path=ply_path)
+    return scene_info
+
 sceneLoadTypeCallbacks = {
     "Colmap": readColmapSceneInfo,
-    "Blender" : readNerfSyntheticInfo
+    "Blender" : readNerfSyntheticInfo,
+    "NerfstudioThermal": readNerfstudioThermalInfo
 }

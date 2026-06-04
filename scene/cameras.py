@@ -16,7 +16,7 @@ from utils.graphics_utils import getWorld2View2, getProjectionMatrix
 
 class Camera(nn.Module):
     def __init__(self, colmap_id, R, T, FoVx, FoVy, image, thermal, gt_alpha_mask,
-                 image_name, uid,
+                 image_name, uid, thermal_R=None, thermal_T=None,
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda"
                  ):
         super(Camera, self).__init__()
@@ -25,6 +25,8 @@ class Camera(nn.Module):
         self.colmap_id = colmap_id
         self.R = R
         self.T = T
+        self.thermal_R = thermal_R if thermal_R is not None else R
+        self.thermal_T = thermal_T if thermal_T is not None else T
         self.FoVx = FoVx
         self.FoVy = FoVy
         self.image_name = image_name
@@ -40,6 +42,8 @@ class Camera(nn.Module):
         self.original_thermal = thermal.clamp(0.0, 1.0).to(self.data_device)
         self.image_width = self.original_image.shape[2]
         self.image_height = self.original_image.shape[1]
+        self.width = self.image_width
+        self.height = self.image_height
 
         if gt_alpha_mask is not None:
             self.original_image *= gt_alpha_mask.to(self.data_device)
@@ -60,6 +64,11 @@ class Camera(nn.Module):
         self.full_proj_transform = (self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
         self.camera_center = self.world_view_transform.inverse()[3, :3]
 
+        self.thermal_world_view_transform = torch.tensor(getWorld2View2(self.thermal_R, self.thermal_T, trans, scale)).transpose(0, 1).cuda()
+        self.thermal_full_proj_transform = (self.thermal_world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
+        self.thermal_camera_center = self.thermal_world_view_transform.inverse()[3, :3]
+        self.has_separate_thermal_pose = thermal_R is not None or thermal_T is not None
+
 class MiniCam:
     def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform):
         self.image_width = width
@@ -72,4 +81,3 @@ class MiniCam:
         self.full_proj_transform = full_proj_transform
         view_inv = torch.inverse(self.world_view_transform)
         self.camera_center = view_inv[3][:3]
-

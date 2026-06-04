@@ -15,21 +15,15 @@ from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianR
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, override_thermal = None):
-    """
-    Render the scene. 
-    
-    Background tensor (bg_color) must be on GPU!
-    """
- 
-    # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means
+def render_from_matrices(viewpoint_camera, pc, pipe, bg_color, scaling_modifier,
+                         viewmatrix, projmatrix, camera_center,
+                         override_color=None, override_thermal=None):
     screenspace_points = torch.zeros_like(pc.get_xyz, dtype=pc.get_xyz.dtype, requires_grad=True, device="cuda") + 0
     try:
         screenspace_points.retain_grad()
     except:
         pass
 
-    # Set up rasterization configuration
     tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
     tanfovy = math.tan(viewpoint_camera.FoVy * 0.5)
 
@@ -40,10 +34,10 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         tanfovy=tanfovy,
         bg=bg_color,
         scale_modifier=scaling_modifier,
-        viewmatrix=viewpoint_camera.world_view_transform,
-        projmatrix=viewpoint_camera.full_proj_transform,
+        viewmatrix=viewmatrix,
+        projmatrix=projmatrix,
         sh_degree=pc.active_sh_degree,
-        campos=viewpoint_camera.camera_center,
+        campos=camera_center,
         prefiltered=False,
         debug=pipe.debug
     )
@@ -54,8 +48,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     means2D = screenspace_points
     opacity = pc.get_opacity
 
-    # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
-    # scaling / rotation by the rasterizer.
     scales = None
     rotations = None
     cov3D_precomp = None
@@ -65,8 +57,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         scales = pc.get_scaling
         rotations = pc.get_rotation
 
-    # If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
-    # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.
     shs = None
     thermal_shs = None
     colors_precomp = None
@@ -75,16 +65,21 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     if override_color is None:
         if pipe.convert_SHs_python:
             shs_view = pc.get_features.transpose(1, 2).view(-1, 3, (pc.max_sh_degree+1)**2)
-            dir_pp = (pc.get_xyz - viewpoint_camera.camera_center.repeat(pc.get_features.shape[0], 1))
+            dir_pp = (pc.get_xyz - camera_center.repeat(pc.get_features.shape[0], 1))
             dir_pp_normalized = dir_pp/dir_pp.norm(dim=1, keepdim=True)
             sh2rgb = eval_sh(pc.active_sh_degree, shs_view, dir_pp_normalized)
             colors_precomp = torch.clamp_min(sh2rgb + 0.5, 0.0)
+            thermal_shs = pc.get_thermal_features
         else:
             shs = pc.get_features
             thermal_shs = pc.get_thermal_features
-            
     else:
         colors_precomp = override_color
+        thermal_shs = pc.get_thermal_features
+
+    if override_thermal is not None:
+        thermal_shs = None
+        thermal_precomp = override_thermal
 
     rendered_thermal, rendered_color, radii = rasterizer(
         means3D = means3D,
@@ -98,12 +93,37 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations = rotations,
         cov3D_precomp = cov3D_precomp)
 
+    return rendered_thermal, rendered_color, radii, screenspace_points
+
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, override_thermal = None):
+    """
+    Render the scene. 
+    
+    Background tensor (bg_color) must be on GPU!
+    """
+    rendered_thermal, rendered_color, radii, screenspace_points = render_from_matrices(
+        viewpoint_camera, pc, pipe, bg_color, scaling_modifier,
+        viewpoint_camera.world_view_transform,
+        viewpoint_camera.full_proj_transform,
+        viewpoint_camera.camera_center,
+        override_color,
+        override_thermal)
+
+    if getattr(viewpoint_camera, "has_separate_thermal_pose", False):
+        rendered_thermal, _, _, _ = render_from_matrices(
+            viewpoint_camera, pc, pipe, bg_color, scaling_modifier,
+            viewpoint_camera.thermal_world_view_transform,
+            viewpoint_camera.thermal_full_proj_transform,
+            viewpoint_camera.thermal_camera_center,
+            override_color,
+            override_thermal)
+
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
     return {
             "render_thermal": rendered_thermal,
             "render_color": rendered_color,
+            "render": rendered_color,
             "viewspace_points": screenspace_points,
             "visibility_filter": radii > 0,
             "radii": radii}
-
