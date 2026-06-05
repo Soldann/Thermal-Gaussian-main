@@ -234,10 +234,10 @@ def training_report(iteration, Ll1_1,loss_1, Ll1_2, loss_2, l1_loss, elapsed, te
                 
                 print("\n[ITER {}] Evaluating color {}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], l1_test, psnr_test, ssim_test, lpips_test))
                 wandb.log({
-                    config['name'] + 'loss_viewpoint - l1_loss': l1_test,
-                    config['name'] + 'loss_viewpoint - psnr': psnr_test,
-                    config['name'] + 'loss_viewpoint - lpips': lpips_test,
-                    config['name'] + 'loss_viewpoint - ssim': ssim_test
+                    config['name'] + '/loss_viewpoint - l1_loss': l1_test,
+                    config['name'] + '/loss_viewpoint - psnr': psnr_test,
+                    config['name'] + '/loss_viewpoint - lpips': lpips_test,
+                    config['name'] + '/loss_viewpoint - ssim': ssim_test
                 }, step=iteration)
                     
         for config in validation_configs_2:

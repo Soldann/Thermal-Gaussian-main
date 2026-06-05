@@ -221,10 +221,10 @@ def training_report(iteration, wandb_step, Ll1, loss, l1_loss, elapsed, testing_
                 print("\n[ITER {}] Evaluating {}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], l1_test, psnr_test, ssim_test, lpips_test))
                 if step ==1:
                     wandb.log({
-                        config['name'] + 'loss_viewpoint - l1_loss': l1_test,
-                        config['name'] + 'loss_viewpoint - psnr': psnr_test,
-                        config['name'] + 'loss_viewpoint - lpips': lpips_test,
-                        config['name'] + 'loss_viewpoint - ssim': ssim_test
+                        config['name'] + '/loss_viewpoint - l1_loss': l1_test,
+                        config['name'] + '/loss_viewpoint - psnr': psnr_test,
+                        config['name'] + '/loss_viewpoint - lpips': lpips_test,
+                        config['name'] + '/loss_viewpoint - ssim': ssim_test
                     }, step=wandb_step)
                 elif step ==2:
                     wandb.log({
