@@ -199,10 +199,16 @@ def training_report(iteration, wandb_step, Ll1, loss, l1_loss, elapsed, testing_
                 for idx, viewpoint in enumerate(config['cameras']):
                     image = torch.clamp(renderFunc(viewpoint, scene.gaussians, *renderArgs)["render"], 0.0, 1.0)
                     gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
-                    if idx < 5:
-                        wandb.log({config['name'] + "_view_{}/render".format(viewpoint.image_name): wandb.Image((image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=wandb_step)
-                        if iteration == testing_iterations[0]:
-                            wandb.log({config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name): wandb.Image((gt_image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=wandb_step)
+                    if step == 1:
+                        if idx < 5:
+                            wandb.log({config['name'] + "_view_{}/render".format(viewpoint.image_name): wandb.Image((image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=wandb_step)
+                            if iteration == testing_iterations[0]:
+                                wandb.log({config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name): wandb.Image((gt_image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=wandb_step)
+                    elif step == 2:
+                        if idx < 5:
+                            wandb.log({config['name'] + "_view_{}/thermal_render".format(viewpoint.image_name): wandb.Image((image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=wandb_step)
+                            if iteration == testing_iterations[0]:
+                                wandb.log({config['name'] + "_view_{}/thermal_ground_truth".format(viewpoint.image_name): wandb.Image((gt_image.permute(1, 2, 0).cpu().numpy() * 255).astype('uint8'))}, step=wandb_step)
                     l1_test += l1_loss(image, gt_image).mean().double()
                     psnr_test += psnr(image, gt_image).mean().double()
                     lpips_test += lpips(image, gt_image, net_type='vgg').mean().double()
@@ -215,17 +221,17 @@ def training_report(iteration, wandb_step, Ll1, loss, l1_loss, elapsed, testing_
                 print("\n[ITER {}] Evaluating {}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], l1_test, psnr_test, ssim_test, lpips_test))
                 if step ==1:
                     wandb.log({
-                        config['name'] + '/color/loss_viewpoint - l1_loss': l1_test,
-                        config['name'] + '/color/loss_viewpoint - psnr': psnr_test,
-                        config['name'] + '/color/loss_viewpoint - lpips': lpips_test,
-                        config['name'] + '/color/loss_viewpoint - ssim': ssim_test
+                        config['name'] + 'loss_viewpoint - l1_loss': l1_test,
+                        config['name'] + 'loss_viewpoint - psnr': psnr_test,
+                        config['name'] + 'loss_viewpoint - lpips': lpips_test,
+                        config['name'] + 'loss_viewpoint - ssim': ssim_test
                     }, step=wandb_step)
                 elif step ==2:
                     wandb.log({
-                        config['name'] + '/thermal/loss_viewpoint - l1_loss': l1_test,
-                        config['name'] + '/thermal/loss_viewpoint - psnr': psnr_test,
-                        config['name'] + '/thermal/loss_viewpoint - lpips': lpips_test,
-                        config['name'] + '/thermal/loss_viewpoint - ssim': ssim_test
+                        config['name'] + '/loss_viewpoint - l1_loss_thermal': l1_test,
+                        config['name'] + '/loss_viewpoint - psnr_thermal': psnr_test,
+                        config['name'] + '/loss_viewpoint - lpips_thermal': lpips_test,
+                        config['name'] + '/loss_viewpoint - ssim_thermal': ssim_test
                     }, step=wandb_step)
                     
 
