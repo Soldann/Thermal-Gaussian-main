@@ -69,17 +69,11 @@ def render_from_matrices(viewpoint_camera, pc, pipe, bg_color, scaling_modifier,
             dir_pp_normalized = dir_pp/dir_pp.norm(dim=1, keepdim=True)
             sh2rgb = eval_sh(pc.active_sh_degree, shs_view, dir_pp_normalized)
             colors_precomp = torch.clamp_min(sh2rgb + 0.5, 0.0)
-            thermal_shs = pc.get_thermal_features
         else:
             shs = pc.get_features
             thermal_shs = pc.get_thermal_features
     else:
         colors_precomp = override_color
-        thermal_shs = pc.get_thermal_features
-
-    if override_thermal is not None:
-        thermal_shs = None
-        thermal_precomp = override_thermal
 
     rendered_thermal, rendered_color, radii = rasterizer(
         means3D = means3D,
