@@ -123,6 +123,13 @@ def transform_matrix_to_colmap_rt(transform_matrix):
     T = w2c[:3, 3]
     return R, T
 
+def load_transforms_json_matrix(transform_matrix):
+    M = np.array(transform_matrix)   # convert list → ndarray
+    R = M[:3, :3].T                  # rotation
+    T = - R @ M[:3, 3]                     # translation
+
+    return R, T
+
 def resolve_frame_path(path, frame_path):
     frame_path = Path(frame_path)
     if frame_path.is_absolute():
@@ -161,11 +168,11 @@ def readNerfstudioThermalCameras(path, transformsfile):
             print(f"Skipping frame with missing thermal image: {thermal_path}")
             continue
 
-        R, T = transform_matrix_to_colmap_rt(frame["transform_matrix"])
+        R, T = load_transforms_json_matrix(frame["transform_matrix"])
         thermal_R = None
         thermal_T = None
         if "thermal_transform_matrix" in frame:
-            thermal_R, thermal_T = transform_matrix_to_colmap_rt(frame["thermal_transform_matrix"])
+            thermal_R, thermal_T = load_transforms_json_matrix(frame["thermal_transform_matrix"])
 
         image = Image.open(image_path)
         thermal = Image.open(thermal_path)
