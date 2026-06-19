@@ -99,7 +99,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         render_pkg = render(viewpoint_cam, gaussians, pipe, bg)
         image, thermal, viewspace_point_tensor, visibility_filter, radii = render_pkg["render_color"], render_pkg["render_thermal"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
 
-
+        print("thermal shape:", thermal.shape)
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
