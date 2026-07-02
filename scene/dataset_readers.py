@@ -345,16 +345,30 @@ def readNerfstudioThermalInfo(path, transformsfile="transforms.json"):
 
     nerf_normalization = getNerfppNorm(train_cam_infos)
 
+    # ply_path = os.path.join(path, "colmap/sparse/0/points3D.ply")
+    # if not os.path.exists(ply_path):
+    #     num_pts = 100_000
+    #     print(f"Generating random point cloud ({num_pts})...")
+
+    #     xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
+    #     shs = np.random.random((num_pts, 3)) / 255.0
+    #     pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
+
+    #     storePly(ply_path, xyz, SH2RGB(shs) * 255)
+    # try:
+    #     pcd = fetchPly(ply_path)
+    # except:
+    #     pcd = None
     ply_path = os.path.join(path, "colmap/sparse/0/points3D.ply")
+    bin_path = os.path.join(path, "colmap/sparse/0/points3D.bin")
+    txt_path = os.path.join(path, "colmap/sparse/0/points3D.txt")
     if not os.path.exists(ply_path):
-        num_pts = 100_000
-        print(f"Generating random point cloud ({num_pts})...")
-
-        xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
-        shs = np.random.random((num_pts, 3)) / 255.0
-        pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
-
-        storePly(ply_path, xyz, SH2RGB(shs) * 255)
+        print("Converting point3d.bin to .ply, will happen only the first time you open the scene.")
+        try:
+            xyz, rgb, _ = read_points3D_binary(bin_path)
+        except:
+            xyz, rgb, _ = read_points3D_text(txt_path)
+        storePly(ply_path, xyz, rgb)
     try:
         pcd = fetchPly(ply_path)
     except:
