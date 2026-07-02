@@ -345,7 +345,7 @@ def readNerfstudioThermalInfo(path, transformsfile="transforms.json"):
 
     nerf_normalization = getNerfppNorm(train_cam_infos)
 
-    ply_path = os.path.join(path, "points3d.ply")
+    ply_path = os.path.join(path, "colmap/sparse/0/points3D.ply")
     if not os.path.exists(ply_path):
         num_pts = 100_000
         print(f"Generating random point cloud ({num_pts})...")
