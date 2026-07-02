@@ -33,6 +33,13 @@ try:
 except ImportError:
     WANDB_FOUND = False
 
+seed = 42
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+torch.backends.cudnn.deterministic = True
+# torch.use_deterministic_algorithms(True)
+torch.backends.cudnn.benchmark = False
+
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
