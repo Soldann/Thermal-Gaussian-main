@@ -125,8 +125,7 @@ def transform_matrix_to_colmap_rt(transform_matrix):
 
 def load_transforms_json_matrix(transform_matrix):
     M = np.array(transform_matrix)   # convert list → ndarray
-    M[:3, 1:3] *= -1                # Convert axes ? 
-    R = M[:3, :3]                  # rotation
+    R = M[:3, :3].T                  # rotation
     T = M[:3, 3]                     # translation
 
     return R, T
