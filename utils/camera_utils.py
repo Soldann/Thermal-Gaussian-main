@@ -54,6 +54,7 @@ def loadCam(args, id, cam_info, resolution_scale):
                   image=gt_image, gt_alpha_mask=loaded_mask,
                   image_name=cam_info.image_name, uid=id, data_device=args.data_device,
                   thermal=gt_thermal,
+                  is_thermal=cam_info.is_thermal,
                   thermal_R=cam_info.thermal_R, thermal_T=cam_info.thermal_T)
 
 

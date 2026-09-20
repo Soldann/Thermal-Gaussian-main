@@ -38,6 +38,7 @@ class CameraInfo(NamedTuple):
     height: int
     thermal_R: np.array = None
     thermal_T: np.array = None
+    is_thermal: bool = False
 
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -159,30 +160,30 @@ def readNerfstudioThermalCameras(path, transformsfile):
     cam_infos = {"train": [], "test": []}
     for idx, frame in enumerate(contents["frames"]):
         image_path = resolve_frame_path(path, frame["file_path"])
-        thermal_path = resolve_frame_path(path, frame.get("thermal_file_path", frame["file_path"]))
+        # thermal_path = resolve_frame_path(path, frame.get("thermal_file_path", frame["file_path"]))
 
         if not os.path.exists(image_path):
             print(f"Skipping frame with missing RGB image: {image_path}")
             continue
-        if not os.path.exists(thermal_path):
-            print(f"Skipping frame with missing thermal image: {thermal_path}")
-            continue
+        # if not os.path.exists(thermal_path):
+        #     print(f"Skipping frame with missing thermal image: {thermal_path}")
+        #     continue
 
         R, T = load_transforms_json_matrix(frame["transform_matrix"])
-        thermal_R = None
-        thermal_T = None
-        if "thermal_transform_matrix" in frame:
-            thermal_R, thermal_T = load_transforms_json_matrix(frame["thermal_transform_matrix"])
 
         image = Image.open(image_path)
-        thermal = Image.open(thermal_path)
+        # thermal = Image.open(thermal_path)
         image_name = Path(image_path).stem
 
+        if ("is_thermal" in frame):
+            is_thermal = frame["is_thermal"]
+        else:
+            is_thermal = "thermal" in image_path
+
         cam_info = CameraInfo(uid=1, R=R, T=T, FovY=FovY, FovX=FovX,
-                              image=image, thermal=thermal,
+                              image=image, thermal=image,
                               image_path=image_path, image_name=image_name,
-                              thermal_path=thermal_path, width=width, height=height,
-                              thermal_R=thermal_R, thermal_T=thermal_T)
+                              width=width, height=height, is_thermal=is_thermal)
         cam_infos[frame_split(frame)].append(cam_info)
 
     return cam_infos["train"], cam_infos["test"]
