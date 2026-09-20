@@ -16,7 +16,7 @@ from utils.graphics_utils import getWorld2View2, getProjectionMatrix
 
 class Camera(nn.Module):
     def __init__(self, colmap_id, R, T, FoVx, FoVy, image, thermal, gt_alpha_mask,
-                 image_name, uid, thermal_R=None, thermal_T=None,
+                 image_name, uid, thermal_R=None, thermal_T=None, is_thermal=False,
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda"
                  ):
         super(Camera, self).__init__()
@@ -27,6 +27,7 @@ class Camera(nn.Module):
         self.T = T
         self.thermal_R = thermal_R if thermal_R is not None else R
         self.thermal_T = thermal_T if thermal_T is not None else T
+        self.is_thermal = is_thermal
         self.FoVx = FoVx
         self.FoVy = FoVy
         self.image_name = image_name

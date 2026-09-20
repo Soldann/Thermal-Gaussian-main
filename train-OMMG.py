@@ -106,17 +106,19 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         render_pkg = render(viewpoint_cam, gaussians, pipe, bg)
         image, thermal, viewspace_point_tensor, visibility_filter, radii = render_pkg["render_color"], render_pkg["render_thermal"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
 
-        # Loss
-        gt_image = viewpoint_cam.original_image.cuda()
-        gt_thermal = viewpoint_cam.original_thermal.cuda()
-        
-        smoothloss_thermal = smoothness_loss(thermal)
+        if viewpoint_cam.is_thermal:
+            gt = viewpoint_cam.original_thermal.cuda()
+            pred = thermal
+            smooth = smoothness_loss(pred)
+        else:
+            gt = viewpoint_cam.original_image.cuda()
+            pred = image
+            smooth = 0.0
 
-        Ll1 = l1_loss(image, gt_image)
-        loss_color = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
-        Ll1_thermal = l1_loss(thermal, gt_thermal)
-        loss_thermal = (1.0 - opt.lambda_dssim) * Ll1_thermal + opt.lambda_dssim * (1.0 - ssim(thermal, gt_thermal)) + 0.6 * smoothloss_thermal
-        loss= (loss_color + loss_thermal) * 0.5
+        Ll1 = l1_loss(pred, gt)
+        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(pred, gt))
+        if viewpoint_cam.is_thermal:
+            loss = loss + 0.6 * smooth
 
         # print("loss:",loss)
         torch.cuda.synchronize()
