@@ -110,13 +110,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             gt = viewpoint_cam.original_thermal.cuda()
             pred = thermal
             smooth = smoothness_loss(pred)
+            Ll1_thermal = l1_loss(pred, gt)
+            Ll1 = None
+            loss = (1.0 - opt.lambda_dssim) * Ll1_thermal + opt.lambda_dssim * (1.0 - ssim(pred, gt))
         else:
             gt = viewpoint_cam.original_image.cuda()
             pred = image
             smooth = 0.0
+            Ll1_thermal = None
+            Ll1 = l1_loss(pred, gt)
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(pred, gt))
 
-        Ll1 = l1_loss(pred, gt)
-        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(pred, gt))
         if viewpoint_cam.is_thermal:
             loss = loss + 0.6 * smooth
 
@@ -228,8 +232,10 @@ def prepare_output_and_logger(args):
 
 def training_report(tb_writer, iteration, Ll1, Ll1_thermal, loss, l1_loss, elapsed, testing_iterations, scene : Scene, renderFunc, renderArgs):
     if tb_writer:
-        tb_writer.add_scalar('train_loss_patches/l1_loss', Ll1.item(), iteration)
-        tb_writer.add_scalar('train_loss_patches/l1_thermal_loss', Ll1_thermal.item(), iteration)
+        if Ll1 is not None:
+            tb_writer.add_scalar('train_loss_patches/l1_loss', Ll1.item(), iteration)
+        if Ll1_thermal is not None:
+            tb_writer.add_scalar('train_loss_patches/l1_thermal_loss', Ll1_thermal.item(), iteration)
         tb_writer.add_scalar('train_loss_patches/total_loss', loss.item(), iteration)
         tb_writer.add_scalar('iter_time', elapsed, iteration)
 
@@ -256,21 +262,26 @@ def training_report(tb_writer, iteration, Ll1, Ll1_thermal, loss, l1_loss, elaps
                     thermal = torch.clamp(renderFunc(viewpoint, scene.gaussians, *renderArgs)["render_thermal"], 0.0, 1.0)
                     gt_thermal = torch.clamp(viewpoint.original_thermal.to("cuda"), 0.0, 1.0)
                     if tb_writer and (idx < 5):
-                        tb_writer.add_images(config['name'] + "_view_{}/render".format(viewpoint.image_name), image[None], global_step=iteration)
-                        tb_writer.add_images(config['name'] + "_view_{}/thermal_render".format(viewpoint.image_name), thermal[None], global_step=iteration)
+                        if viewpoint.is_thermal:
+                            tb_writer.add_images(config['name'] + "_view_{}/thermal_render".format(viewpoint.image_name), thermal[None], global_step=iteration)
+                        else:
+                            tb_writer.add_images(config['name'] + "_view_{}/render".format(viewpoint.image_name), image[None], global_step=iteration)
                         if iteration == testing_iterations[0]:
-                            tb_writer.add_images(config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name), gt_image[None], global_step=iteration)
-                            tb_writer.add_images(config['name'] + "_view_{}/thermal_ground_truth".format(viewpoint.image_name), gt_thermal[None], global_step=iteration)
-                            
-                    l1_test += l1_loss(image, gt_image).mean().double()
-                    psnr_test += psnr(image, gt_image).mean().double()
-                    ssim_test += ssim(image, gt_image).mean().double()
-                    lpips_test += lpips(image, gt_image, net_type='vgg').mean().double()
+                            if viewpoint.is_thermal:
+                                tb_writer.add_images(config['name'] + "_view_{}/thermal_ground_truth".format(viewpoint.image_name), gt_thermal[None], global_step=iteration)
+                            else:
+                                tb_writer.add_images(config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name), gt_image[None], global_step=iteration)
 
-                    l1_thermal_test += l1_loss(thermal, gt_thermal).mean().double()
-                    psnr_thermal_test += psnr(thermal, gt_thermal).mean().double()
-                    ssim_thermal_test += ssim(thermal, gt_thermal).mean().double()
-                    lpips_thermal_test += lpips(thermal, gt_thermal, net_type='vgg').mean().double()
+                    if viewpoint.is_thermal:     
+                        l1_thermal_test += l1_loss(thermal, gt_thermal).mean().double()
+                        psnr_thermal_test += psnr(thermal, gt_thermal).mean().double()
+                        ssim_thermal_test += ssim(thermal, gt_thermal).mean().double()
+                        lpips_thermal_test += lpips(thermal, gt_thermal, net_type='vgg').mean().double()   
+                    else:
+                        l1_test += l1_loss(image, gt_image).mean().double()
+                        psnr_test += psnr(image, gt_image).mean().double()
+                        ssim_test += ssim(image, gt_image).mean().double()
+                        lpips_test += lpips(image, gt_image, net_type='vgg').mean().double()
 
                 psnr_test /= len(config['cameras'])
                 l1_test /= len(config['cameras'])
@@ -281,7 +292,6 @@ def training_report(tb_writer, iteration, Ll1, Ll1_thermal, loss, l1_loss, elaps
                 l1_thermal_test /= len(config['cameras'])
                 ssim_thermal_test /= len(config['cameras'])
                 lpips_thermal_test /= len(config['cameras'])
-
 
                 print("\n[ITER {}] Evaluating {}: L1 {} PSNR {} SSIM {} LPIPS {}".format(iteration, config['name'], l1_test, psnr_test, ssim_test, lpips_test))
                 print("\n[ITER {}] Thermal Evaluating {}: L1 {} PSNR {} SSIM {} LPIPS {} ".format(iteration, config['name'], l1_thermal_test, psnr_thermal_test, ssim_thermal_test, lpips_thermal_test))
