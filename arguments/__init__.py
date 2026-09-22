@@ -49,6 +49,7 @@ class ModelParams(ParamGroup):
         self.sh_degree = 3
         self._source_path = ""
         self._model_path = ""
+        self._nerfstudio_transforms_name = ""
         self._images = "images"
         self._thermal = "thermal"
         self._resolution = -1

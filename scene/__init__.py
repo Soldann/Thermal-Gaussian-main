@@ -42,7 +42,10 @@ class Scene:
         self.train_cameras = {}
         self.test_cameras = {}
 
-        if os.path.exists(os.path.join(args.source_path, "transforms.json")):
+        if args.nerfstudio_transforms_name and os.path.exists(os.path.join(args.source_path, args.nerfstudio_transforms_name)):
+            print("Found Nerfstudio transforms file " + args.nerfstudio_transforms_name)
+            scene_info = sceneLoadTypeCallbacks["NerfstudioThermal"](args.source_path)
+        elif os.path.exists(os.path.join(args.source_path, "transforms.json")):
             print("Found transforms.json file, assuming Nerfstudio thermal data set!")
             scene_info = sceneLoadTypeCallbacks["NerfstudioThermal"](args.source_path)
         elif os.path.exists(os.path.join(args.source_path, "sparse")):
