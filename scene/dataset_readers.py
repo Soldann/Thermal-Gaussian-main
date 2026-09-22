@@ -182,7 +182,7 @@ def readNerfstudioThermalCameras(path, transformsfile):
 
         cam_info = CameraInfo(uid=1, R=R, T=T, FovY=FovY, FovX=FovX,
                               image=image, thermal=image,
-                              image_path=image_path, image_name=image_name,
+                              image_path=image_path, thermal_path=image_path, image_name=image_name,
                               width=width, height=height, is_thermal=is_thermal)
         cam_infos[frame_split(frame)].append(cam_info)
 

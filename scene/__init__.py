@@ -44,7 +44,7 @@ class Scene:
 
         if args.nerfstudio_transforms_name and os.path.exists(os.path.join(args.source_path, args.nerfstudio_transforms_name)):
             print("Found Nerfstudio transforms file " + args.nerfstudio_transforms_name)
-            scene_info = sceneLoadTypeCallbacks["NerfstudioThermal"](args.source_path)
+            scene_info = sceneLoadTypeCallbacks["NerfstudioThermal"](args.source_path, args.nerfstudio_transforms_name)
         elif os.path.exists(os.path.join(args.source_path, "transforms.json")):
             print("Found transforms.json file, assuming Nerfstudio thermal data set!")
             scene_info = sceneLoadTypeCallbacks["NerfstudioThermal"](args.source_path)
