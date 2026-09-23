@@ -338,7 +338,7 @@ def readNerfSyntheticInfo(path, white_background, extension=".png"):
     return scene_info
 
 def readNerfstudioThermalInfo(path, transformsfile="transforms.json"):
-    print("Reading Nerfstudio thermal transforms")
+    print("Reading Nerfstudio thermal transforms file: ", transformsfile)
     train_cam_infos, test_cam_infos = readNerfstudioThermalCameras(path, transformsfile)
     train_cam_infos = sorted(train_cam_infos, key=lambda x: x.image_name)
     test_cam_infos = sorted(test_cam_infos, key=lambda x: x.image_name)
