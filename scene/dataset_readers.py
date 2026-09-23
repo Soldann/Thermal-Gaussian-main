@@ -360,20 +360,26 @@ def readNerfstudioThermalInfo(path, transformsfile="transforms.json"):
     #     pcd = fetchPly(ply_path)
     # except:
     #     pcd = None
-    ply_path = os.path.join(path, "colmap/sparse/0/points3D.ply")
-    bin_path = os.path.join(path, "colmap/sparse/0/points3D.bin")
-    txt_path = os.path.join(path, "colmap/sparse/0/points3D.txt")
-    if not os.path.exists(ply_path):
-        print("Converting point3d.bin to .ply, will happen only the first time you open the scene.")
+    nerfstudio_ply_path = os.path.join(path, "pointcloud.ply")
+    if not os.path.exists(nerfstudio_ply_path): # falback to colmap pcd
+        ply_path = os.path.join(path, "colmap/sparse/0/points3D.ply")
+        bin_path = os.path.join(path, "colmap/sparse/0/points3D.bin")
+        txt_path = os.path.join(path, "colmap/sparse/0/points3D.txt")
+        if not os.path.exists(ply_path):
+            print("Converting point3d.bin to .ply, will happen only the first time you open the scene.")
+            try:
+                xyz, rgb, _ = read_points3D_binary(bin_path)
+            except:
+                xyz, rgb, _ = read_points3D_text(txt_path)
+            storePly(ply_path, xyz, rgb)
         try:
-            xyz, rgb, _ = read_points3D_binary(bin_path)
+            pcd = fetchPly(ply_path)
         except:
-            xyz, rgb, _ = read_points3D_text(txt_path)
-        storePly(ply_path, xyz, rgb)
-    try:
-        pcd = fetchPly(ply_path)
-    except:
-        pcd = None
+            pcd = None
+    else:
+        print("Loading pointcloud from ", nerfstudio_ply_path)
+        pcd = fetchPly(nerfstudio_ply_path)
+        ply_path = nerfstudio_ply_path
 
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_cam_infos,
