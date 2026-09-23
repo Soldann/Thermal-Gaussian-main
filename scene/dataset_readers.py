@@ -148,6 +148,7 @@ def frame_split(frame):
 
 def readNerfstudioThermalCameras(path, transformsfile):
     with open(os.path.join(path, transformsfile)) as json_file:
+        print("Loading file: ", os.path.join(path, transformsfile))
         contents = json.load(json_file)
 
     width = int(contents["w"])
@@ -186,6 +187,7 @@ def readNerfstudioThermalCameras(path, transformsfile):
                               width=width, height=height, is_thermal=is_thermal)
         cam_infos[frame_split(frame)].append(cam_info)
 
+        print("Attaching to ", frame_split(frame))
     return cam_infos["train"], cam_infos["test"]
 
 def fetchPly(path):
@@ -344,6 +346,7 @@ def readNerfstudioThermalInfo(path, transformsfile="transforms.json"):
     train_cam_infos = sorted(train_cam_infos, key=lambda x: x.image_name)
     test_cam_infos = sorted(test_cam_infos, key=lambda x: x.image_name)
 
+    print(train_cam_infos)
     nerf_normalization = getNerfppNorm(train_cam_infos)
 
     # ply_path = os.path.join(path, "colmap/sparse/0/points3D.ply")
