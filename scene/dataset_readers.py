@@ -163,7 +163,7 @@ def readNerfstudioThermalCameras(path, transformsfile):
     cam_infos = {"train": [], "test": []}
     for idx, frame in enumerate(contents["frames"]):
         image_path = resolve_frame_path(path, frame["file_path"])
-        thermal_path = resolve_frame_path(path, frame.get("thermal_file_path", frame["file_path"]))
+        thermal_path = resolve_frame_path(path, frame["thermal_file_path"])
 
         if not os.path.exists(image_path):
             print(f"Skipping frame with missing RGB image: {image_path}")
